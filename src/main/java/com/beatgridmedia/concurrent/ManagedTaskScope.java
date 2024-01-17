@@ -128,6 +128,16 @@ public final class ManagedTaskScope extends StructuredTaskScope<Object> {
     }
 
     /**
+     * Perform fork without a result.
+     *
+     * @param task task for the thread to execute.
+     * @return the subtask
+     */
+    public Subtask<?> fork(Runnable task) {
+        return super.fork(wrapAll(() -> { task.run(); return null; }));
+    }
+
+    /**
      * Wait for all subtasks started in this task scope to complete or for a subtask
      * to {@linkplain Subtask.State#FAILED fail}.
      *
