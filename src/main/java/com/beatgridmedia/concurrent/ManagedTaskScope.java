@@ -21,6 +21,8 @@ import static java.util.Objects.requireNonNull;
 
 /**
  * A task scope that manages the execution of tasks in a thread pool.
+ *
+ * @auhor Leon van Zantvoort
  */
 public final class ManagedTaskScope extends StructuredTaskScope<Object> {
 
@@ -37,16 +39,40 @@ public final class ManagedTaskScope extends StructuredTaskScope<Object> {
 
     private final List<TaskWrapper> taskWrappers;
 
-    @FunctionalInterface
+    /**
+     * Interface for wrapping tasks, providing a way to manage tasks.
+     */
     public interface TaskWrapper {
+
+        /**
+         * Wrap a task.
+         *
+         * @apiNote Implementations must not call the {@code task} from this method.
+         *
+         * @param task task to wrap.
+         * @param <U> type of the result of the task.
+         * @return wrapped task.
+         * @throws Exception if the task could not be wrapped.
+         */
         <U> Callable<U> wrap(@Nonnull Callable<U> task) throws Exception;
     }
-    public static class UncheckedTaskException extends RuntimeException {
-        UncheckedTaskException(Throwable cause) {
-            super(cause);
-        }
-    }
 
+    /**
+     * Creates a structured task scope with the given name and thread factory. The task
+     * scope is optionally named for the purposes of monitoring and management. The thread
+     * factory is used to {@link ThreadFactory#newThread(Runnable) create} threads when
+     * subtasks are {@linkplain #fork(Callable) forked}. The task scope is owned by the
+     * current thread.
+     *
+     * <p>Construction captures the current thread's {@linkplain ScopedValue scoped value}
+     * bindings for inheritance by threads started in the task scope. The
+     * <a href="#TreeStructure">Tree Structure</a> section in the class description details
+     * how parent-child relations are established implicitly for the purpose of inheritance
+     * of scoped value bindings.</p>
+     *
+     * @param name the name of the task scope, can be null.
+     * @param factory the thread factory.
+     */
     public ManagedTaskScope(@Nullable String name,
                             @Nonnull ThreadFactory factory,
                             @Nonnull List<TaskWrapper> wrappers) {
@@ -54,6 +80,17 @@ public final class ManagedTaskScope extends StructuredTaskScope<Object> {
         this.taskWrappers = requireNonNull(wrappers);
     }
 
+    /**
+     * Invoked by a subtask when it completes successfully or fails in this task scope.
+     * This method is not invoked if a subtask completes after the task scope is
+     * {@linkplain #shutdown() shut down}.
+     *
+     * @apiNote The {@code handleComplete} method should be thread safe. It may be
+     * invoked by several threads concurrently.
+     *
+     * @param subtask the subtask.
+     * @throws IllegalArgumentException if called with a subtask that has not completed.
+     */
     @Override
     protected void handleComplete(Subtask<?> subtask) {
         if (subtask.state() == Subtask.State.FAILED
@@ -63,7 +100,14 @@ public final class ManagedTaskScope extends StructuredTaskScope<Object> {
         }
     }
 
-    public <U> Callable<U> wrapAll(@Nonnull Callable<U> task) {
+    /**
+     * Wrap a task with all task wrappers, effectively managing the task.
+     *
+     * @param task task to wrap.
+     * @return wrapped task.
+     * @param <U> type of the result of the task.
+     */
+    private <U> Callable<U> wrapAll(@Nonnull Callable<U> task) {
         return taskWrappers.stream()
                 .reduce(task,
                         (currentTask, wrapper) -> {
@@ -83,13 +127,13 @@ public final class ManagedTaskScope extends StructuredTaskScope<Object> {
      * Starts a new thread in this task scope to execute a value-returning task, thus
      * creating a <em>subtask</em> of this task scope.
      *
-     * <p> The value-returning task is provided to this method as a {@link Callable}, the
+     * <p>The value-returning task is provided to this method as a {@link Callable}, the
      * thread executes the task's {@link Callable#call() call} method. The thread is
      * created with the task scope's {@link ThreadFactory}. It inherits the current thread's
      * {@linkplain ScopedValue scoped value} bindings. The bindings must match the bindings
-     * captured when the task scope was created.
+     * captured when the task scope was created.</p>
      *
-     * <p> This method returns a {@link Subtask Subtask} to represent the <em>forked
+     * <p>This method returns a {@link Subtask Subtask} to represent the <em>forked
      * subtask</em>. The {@code Subtask} object can be used to obtain the result when
      * the subtask completes successfully, or the exception when the subtask fails. To
      * ensure correct usage, the {@link Subtask#get() get()} and {@link Subtask#exception()
@@ -98,29 +142,25 @@ public final class ManagedTaskScope extends StructuredTaskScope<Object> {
      * methods. When the subtask completes, the thread invokes the {@link
      * #handleComplete(Subtask) handleComplete} method to consume the completed subtask.
      * If the task scope is {@linkplain #shutdown() shut down} before the subtask completes
-     * then the {@code handleComplete} method will not be invoked.
+     * then the {@code handleComplete} method will not be invoked.</p>
      *
-     * <p> If this task scope is {@linkplain #shutdown() shutdown} (or in the process of
+     * <p>If this task scope is {@linkplain #shutdown() shutdown} (or in the process of
      * shutting down) then the subtask will not run and the {@code handleComplete} method
-     * will not be invoked.
+     * will not be invoked.</p>
      *
      * <p> This method may only be invoked by the task scope owner or threads contained
-     * in the task scope.
+     * in the task scope.</p>
      *
-     * @implSpec This method may be overridden for customization purposes, wrapping tasks
-     * for example. If overridden, the subclass must invoke {@code super.fork} to start a
-     * new thread in this task scope.
-     *
-     * @param task the value-returning task for the thread to execute
-     * @param <U> the result type
-     * @return the subtask
-     * @throws IllegalStateException if this task scope is closed
+     * @param task the value-returning task for the thread to execute.
+     * @param <U> the result type.
+     * @return the subtask.
+     * @throws IllegalStateException if this task scope is closed.
      * @throws WrongThreadException if the current thread is not the task scope owner or a
-     * thread contained in the task scope
+     * thread contained in the task scope.
      * @throws StructureViolationException if the current scoped value bindings are not
-     * the same as when the task scope was created
+     * the same as when the task scope was created.
      * @throws RejectedExecutionException if the thread factory rejected creating a
-     * thread to run the subtask
+     * thread to run the subtask.
      */
     @Override
     public <U> Subtask<U> fork(Callable<? extends U> task) {
@@ -141,13 +181,13 @@ public final class ManagedTaskScope extends StructuredTaskScope<Object> {
      * Wait for all subtasks started in this task scope to complete or for a subtask
      * to {@linkplain Subtask.State#FAILED fail}.
      *
-     * <p> This method waits for all subtasks by waiting for all threads {@linkplain
+     * <p>This method waits for all subtasks by waiting for all threads {@linkplain
      * #fork(Callable) started} in this task scope to finish execution. It stops waiting
      * when all threads finish, a subtask fails, or the current thread is {@linkplain
      * Thread#interrupt() interrupted}. It also stops waiting if the {@link #shutdown()
-     * shutdown} method is invoked directly to shut down this task scope.
+     * shutdown} method is invoked directly to shut down this task scope.</p>
      *
-     * <p> This method may only be invoked by the task scope owner.
+     * <p> This method may only be invoked by the task scope owner.</p>
      *
      * @throws IllegalStateException {@inheritDoc}
      * @throws WrongThreadException {@inheritDoc}
@@ -162,13 +202,13 @@ public final class ManagedTaskScope extends StructuredTaskScope<Object> {
      * Wait for all subtasks started in this task scope to complete or for a subtask
      * to {@linkplain Subtask.State#FAILED fail}.
      *
-     * <p> This method waits for all subtasks by waiting for all threads {@linkplain
+     * <p>This method waits for all subtasks by waiting for all threads {@linkplain
      * #fork(Callable) started} in this task scope to finish execution. It stops waiting
      * when all threads finish, a subtask fails, or the current thread is {@linkplain
      * Thread#interrupt() interrupted}. It also stops waiting if the {@link #shutdown()
-     * shutdown} method is invoked directly to shut down this task scope.
+     * shutdown} method is invoked directly to shut down this task scope.</p>
      *
-     * <p> This method may only be invoked by the task scope owner.
+     * <p>This method may only be invoked by the task scope owner.</p>
      *
      * @throws IllegalStateException {@inheritDoc}
      * @throws WrongThreadException {@inheritDoc}
@@ -188,22 +228,20 @@ public final class ManagedTaskScope extends StructuredTaskScope<Object> {
      * Wait for all subtasks started in this task scope to complete or for a subtask
      * to {@linkplain Subtask.State#FAILED fail}, up to the given deadline.
      *
-     * <p> This method waits for all subtasks by waiting for all threads {@linkplain
+     * <p>This method waits for all subtasks by waiting for all threads {@linkplain
      * #fork(Callable) started} in this task scope to finish execution. It stops waiting
      * when all threads finish, a subtask fails, the deadline is reached, or the current
      * thread is {@linkplain Thread#interrupt() interrupted}. It also stops waiting
      * if the {@link #shutdown() shutdown} method is invoked directly to shut down
-     * this task scope.
+     * this task scope.</p>
      *
-     * <p> This method may only be invoked by the task scope owner.
+     * <p>This method may only be invoked by the task scope owner.</p>
      *
      * @throws IllegalStateException {@inheritDoc}
      * @throws WrongThreadException {@inheritDoc}
      */
     @Override
-    public ManagedTaskScope joinUntil(Instant deadline)
-            throws InterruptedException, TimeoutException
-    {
+    public ManagedTaskScope joinUntil(Instant deadline) throws InterruptedException, TimeoutException {
         super.joinUntil(deadline);
         return this;
     }
@@ -212,14 +250,14 @@ public final class ManagedTaskScope extends StructuredTaskScope<Object> {
      * Wait for all subtasks started in this task scope to complete or for a subtask
      * to {@linkplain Subtask.State#FAILED fail}, up to the given deadline.
      *
-     * <p> This method waits for all subtasks by waiting for all threads {@linkplain
+     * <p>This method waits for all subtasks by waiting for all threads {@linkplain
      * #fork(Callable) started} in this task scope to finish execution. It stops waiting
      * when all threads finish, a subtask fails, the deadline is reached, or the current
      * thread is {@linkplain Thread#interrupt() interrupted}. It also stops waiting
      * if the {@link #shutdown() shutdown} method is invoked directly to shut down
      * this task scope.
      *
-     * <p> This method may only be invoked by the task scope owner.
+     * <p>This method may only be invoked by the task scope owner.</p>
      *
      * @throws IllegalStateException {@inheritDoc}
      * @throws WrongThreadException {@inheritDoc}
@@ -240,8 +278,7 @@ public final class ManagedTaskScope extends StructuredTaskScope<Object> {
      * failed}. If no subtasks failed then an empty {@code Optional} is returned.
      *
      * @return the exception for the first subtask to fail or an empty optional if no
-     * subtasks failed
-     *
+     * subtasks failed.
      * @throws WrongThreadException if the current thread is not the task scope owner
      * @throws IllegalStateException if the task scope owner did not join after forking
      */
@@ -271,9 +308,8 @@ public final class ManagedTaskScope extends StructuredTaskScope<Object> {
      * subtask to fail. The exception returned by the function is thrown. This method
      * does nothing if no subtasks failed.
      *
-     * @param esf the exception supplying function
-     * @param <X> type of the exception to be thrown
-     *
+     * @param esf the exception supplying function.
+     * @param <X> type of the exception to be thrown.
      * @throws X produced by the exception supplying function
      * @throws WrongThreadException if the current thread is not the task scope owner
      * @throws IllegalStateException if the task scope owner did not join after forking
