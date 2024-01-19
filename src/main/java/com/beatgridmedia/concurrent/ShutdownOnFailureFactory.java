@@ -7,5 +7,12 @@ import java.util.concurrent.StructuredTaskScope.ShutdownOnFailure;
  *
  * @author Leon van Zantvoort
  */
-public interface ShutdownOnFailureFactory extends StructuredTaskScopeFactory<ShutdownOnFailure> {
+public interface ShutdownOnFailureFactory extends StructuredTaskScopeFactory {
+
+    /**
+     * Creates a new instance of the {@link ShutdownOnFailure} scope supported by this factory.
+     *
+     * @return a new instance of the {@link ShutdownOnFailure} scope supported by this factory.
+     */
+    ShutdownOnFailure create();
 }

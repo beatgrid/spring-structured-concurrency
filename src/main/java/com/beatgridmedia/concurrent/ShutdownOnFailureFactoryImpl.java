@@ -8,7 +8,7 @@ import java.util.concurrent.StructuredTaskScope.ShutdownOnFailure;
  *
  * @author Leon van Zantvoort
  */
-public final class ShutdownOnFailureFactoryImpl extends AbstractStructuredTaskScopeFactory<ShutdownOnFailure>
+public final class ShutdownOnFailureFactoryImpl extends AbstractStructuredTaskScopeFactory
         implements ShutdownOnFailureFactory {
 
     /**

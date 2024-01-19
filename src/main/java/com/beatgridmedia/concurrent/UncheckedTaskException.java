@@ -16,7 +16,7 @@ public class UncheckedTaskException extends RuntimeException {
      *
      * @param cause the {@code Throwable} which is the cause of this exception.
      */
-    UncheckedTaskException(@Nonnull Throwable cause) {
+    public UncheckedTaskException(@Nonnull Throwable cause) {
         super(requireNonNull(cause));
     }
 }

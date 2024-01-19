@@ -1,6 +1,5 @@
 package com.beatgridmedia.concurrent;
 
-import java.util.concurrent.StructuredTaskScope;
 import java.util.concurrent.StructuredTaskScope.ShutdownOnSuccess;
 
 /**
@@ -8,16 +7,17 @@ import java.util.concurrent.StructuredTaskScope.ShutdownOnSuccess;
  *
  * @author Leon van Zantvoort
  */
-public final class ShutdownOnSuccessFactoryImpl<T> extends AbstractStructuredTaskScopeFactory<ShutdownOnSuccess<T>>
-        implements ShutdownOnSuccessFactory<T> {
+public final class ShutdownOnSuccessFactoryImpl extends AbstractStructuredTaskScopeFactory
+        implements ShutdownOnSuccessFactory {
 
     /**
-     * Creates a new instance of the {@link StructuredTaskScope} supported by this factory.
+     * Creates a new instance of the {@link ShutdownOnSuccess} scope supported by this factory.
      *
-     * @return a new instance of the {@link StructuredTaskScope} supported by this factory.
+     * @param <T> the type of the result of the task.
+     * @return a new instance of the {@link ShutdownOnSuccess} scope supported by this factory.
      */
     @Override
-    public ShutdownOnSuccess<T> create() {
+    public <T> ShutdownOnSuccess<T> create() {
         return new ShutdownOnSuccess<>(getName(), getThreadFactory());
     }
 }

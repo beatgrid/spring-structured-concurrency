@@ -7,11 +7,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Abstract base class for {@link StructuredTaskScopeFactory} implementations.
  *
- * @param <T> The type of the {@link StructuredTaskScope} that is created by this factory.
  * @author Leon van Zantvoort
  */
-public abstract class AbstractStructuredTaskScopeFactory<T extends StructuredTaskScope<?>>
-        implements StructuredTaskScopeFactory<T> {
+public abstract class AbstractStructuredTaskScopeFactory implements StructuredTaskScopeFactory {
 
     private final AtomicInteger scopeCounter = new AtomicInteger();
     private String name;

@@ -1,6 +1,7 @@
-package com.beatgridmedia.concurrent;
+package com.beatgridmedia.concurrent.managed;
 
-import com.beatgridmedia.concurrent.ManagedTaskScope.TaskWrapper;
+import com.beatgridmedia.concurrent.AbstractStructuredTaskScopeFactory;
+import com.beatgridmedia.concurrent.managed.ManagedTaskScope.TaskManagingWrapper;
 import jakarta.annotation.Nonnull;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -13,11 +14,11 @@ import java.util.concurrent.StructuredTaskScope;
 import static java.lang.Integer.MAX_VALUE;
 
 /**
- * Factory for the {@link ManagedTaskScope} instances.
+ * Factory for the managed task scopes.
  *
  * @author Leon van Zantvoort
  */
-public final class ManagedTaskScopeFactoryImpl extends AbstractStructuredTaskScopeFactory<ManagedTaskScope>
+public abstract class ManagedTaskScopeFactoryImpl extends AbstractStructuredTaskScopeFactory
         implements ManagedTaskScopeFactory {
 
     private int threadCount;
@@ -126,13 +127,12 @@ public final class ManagedTaskScopeFactoryImpl extends AbstractStructuredTaskSco
     }
 
     /**
-     * Creates a new instance of the {@link StructuredTaskScope} supported by this factory.
+     * Returns the {@link TaskManagingWrapper} instances that are used to wrap the tasks.
      *
-     * @return a new instance of the {@link StructuredTaskScope} supported by this factory.
+     * @return the {@link TaskManagingWrapper} instances that are used to wrap the tasks.
      */
-    @Override
-    public ManagedTaskScope create() {
-        List<TaskWrapper> managedWrappers = new ArrayList<>();
+    protected List<TaskManagingWrapper> createTaskManagingWrappers() {
+        List<TaskManagingWrapper> managedWrappers = new ArrayList<>();
         if (threadCount != MAX_VALUE) {
             managedWrappers.add(wrapSemaphore(new Semaphore(threadCount, true), lockOnFork));
         }
@@ -142,19 +142,19 @@ public final class ManagedTaskScopeFactoryImpl extends AbstractStructuredTaskSco
         if (transactionTemplate != null) {
             managedWrappers.add(wrapTransactionTemplate(transactionTemplate));
         }
-        return new ManagedTaskScope(getName(), getThreadFactory(), managedWrappers);
+        return List.copyOf(managedWrappers);
     }
 
     /**
-     * Wraps the given {@link TransactionTemplate} in a {@link TaskWrapper}.
+     * Wraps the given {@link TransactionTemplate} in a {@link TaskManagingWrapper}.
      *
      * @param semaphore the {@link Semaphore} to use.
      * @param lockOnFork whether to lock on fork or not.
-     * @return the {@link TaskWrapper} that wraps the given {@link Semaphore}.
+     * @return the {@link TaskManagingWrapper} that wraps the given {@link Semaphore}.
      */
-    private static TaskWrapper wrapSemaphore(@Nonnull Semaphore semaphore, boolean lockOnFork) {
+    private static TaskManagingWrapper wrapSemaphore(@Nonnull Semaphore semaphore, boolean lockOnFork) {
         if (lockOnFork) {
-            return new TaskWrapper() {
+            return new TaskManagingWrapper() {
                 @Override
                 public <U> Callable<U> wrap(@Nonnull Callable<U> task) throws InterruptedException {
                     semaphore.acquire();
@@ -170,7 +170,7 @@ public final class ManagedTaskScopeFactoryImpl extends AbstractStructuredTaskSco
                 }
             };
         }
-        return new TaskWrapper() {
+        return new TaskManagingWrapper() {
             @Override
             public <U> Callable<U> wrap(@Nonnull Callable<U> task) {
                 return () -> {
@@ -188,13 +188,13 @@ public final class ManagedTaskScopeFactoryImpl extends AbstractStructuredTaskSco
     }
 
     /**
-     * Wraps the given {@link TransactionTemplate} in a {@link TaskWrapper}.
+     * Wraps the given {@link TransactionTemplate} in a {@link TaskManagingWrapper}.
      *
      * @param template the {@link TransactionTemplate} to use.
-     * @return the {@link TaskWrapper} that wraps the given {@link TransactionTemplate}.
+     * @return the {@link TaskManagingWrapper} that wraps the given {@link TransactionTemplate}.
      */
-    private static TaskWrapper wrapTransactionTemplate(@Nonnull TransactionTemplate template) {
-        return new TaskWrapper() {
+    private static TaskManagingWrapper wrapTransactionTemplate(@Nonnull TransactionTemplate template) {
+        return new TaskManagingWrapper() {
             @Override
             public <U> Callable<U> wrap(@Nonnull Callable<U> task) {
                 return () -> template.execute(_ -> {
