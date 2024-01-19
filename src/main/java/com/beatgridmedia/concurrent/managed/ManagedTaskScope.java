@@ -159,16 +159,6 @@ public abstract class ManagedTaskScope<T> extends StructuredTaskScope<T> {
     }
 
     /**
-     * Convenience method to fork a task without result.
-     *
-     * @param task task for the thread to execute.
-     * @return the subtask
-     */
-    public Subtask<?> fork(Runnable task) {
-        return super.fork(wrapAll(() -> { task.run(); return null; }));
-    }
-
-    /**
      * A {@code StructuredTaskScope} that captures the result of the first subtask to
      * complete {@linkplain Subtask.State#SUCCESS successfully}. Once captured, it
      * {@linkplain #shutdown() shuts down} the task scope to interrupt unfinished threads
