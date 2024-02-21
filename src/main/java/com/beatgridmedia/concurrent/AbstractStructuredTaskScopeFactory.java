@@ -4,6 +4,9 @@ import java.util.concurrent.StructuredTaskScope;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static java.lang.Long.toHexString;
+import static java.lang.System.identityHashCode;
+
 /**
  * Abstract base class for {@link StructuredTaskScopeFactory} implementations.
  *
@@ -64,7 +67,10 @@ public abstract class AbstractStructuredTaskScopeFactory implements StructuredTa
      * @return A new {@link ThreadFactory} instance.
      */
     protected ThreadFactory getThreadFactory() {
-        String name = STR."\{getName()}-\{scopeCounter.getAndIncrement()}-";
+        String name = STR."\{switch(getName()) {
+            case null -> toHexString(identityHashCode(this));
+            case String s -> s;
+        }}-\{scopeCounter.getAndIncrement()}-";
         if (isVirtual()) {
             return Thread.ofVirtual().name(name, 0).factory();
         }
