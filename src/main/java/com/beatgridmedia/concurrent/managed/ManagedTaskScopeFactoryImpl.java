@@ -1,6 +1,7 @@
 package com.beatgridmedia.concurrent.managed;
 
 import com.beatgridmedia.concurrent.AbstractStructuredTaskScopeFactory;
+import com.beatgridmedia.concurrent.UncheckedTaskException;
 import com.beatgridmedia.concurrent.managed.ManagedTaskScope.TaskManagingWrapper;
 import jakarta.annotation.Nonnull;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -200,8 +201,10 @@ public abstract class ManagedTaskScopeFactoryImpl extends AbstractStructuredTask
                 return () -> template.execute(_ -> {
                     try {
                         return task.call();
+                    } catch (RuntimeException e) {
+                        throw e;
                     } catch (Exception e) {
-                        throw new RuntimeException(e);
+                        throw new UncheckedTaskException(e);
                     }
                 });
             }
