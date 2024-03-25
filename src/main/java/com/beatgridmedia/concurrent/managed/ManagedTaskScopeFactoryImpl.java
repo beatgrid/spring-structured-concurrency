@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.StructuredTaskScope;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.Integer.MAX_VALUE;
 
@@ -155,19 +157,33 @@ public abstract class ManagedTaskScopeFactoryImpl extends AbstractStructuredTask
      */
     private static TaskManagingWrapper wrapSemaphore(@Nonnull Semaphore semaphore, boolean lockOnFork) {
         if (lockOnFork) {
+            AtomicBoolean closed = new AtomicBoolean();
+            AtomicInteger acquiredPermits = new AtomicInteger();
             return new TaskManagingWrapper() {
                 @Override
                 public <U> Callable<U> wrap(@Nonnull Callable<U> task) throws InterruptedException {
                     semaphore.acquire();
+                    if (closed.get()) {
+                        semaphore.release();
+                        return () -> {
+                            throw new IllegalStateException("The scope is closed.");
+                        };
+                    }
+                    acquiredPermits.incrementAndGet();
                     return () -> {
-                        {
-                            try {
-                                return task.call();
-                            } finally {
-                                semaphore.release();
-                            }
+                        try {
+                            return task.call();
+                        } finally {
+                            semaphore.release();
                         }
                     };
+                }
+
+                @Override
+                public void close() {
+                    closed.set(true);
+                    // No tasks will be executed anymore. Cleanup outstanding permits.
+                    semaphore.release(acquiredPermits.getAndSet(0));
                 }
             };
         }
@@ -175,15 +191,18 @@ public abstract class ManagedTaskScopeFactoryImpl extends AbstractStructuredTask
             @Override
             public <U> Callable<U> wrap(@Nonnull Callable<U> task) {
                 return () -> {
-                    {
-                        semaphore.acquire();
-                        try {
-                            return task.call();
-                        } finally {
-                            semaphore.release();
-                        }
+                    semaphore.acquire();
+                    try {
+                        return task.call();
+                    } finally {
+                        semaphore.release();
                     }
                 };
+
+            }
+
+            @Override
+            public void close() {
             }
         };
     }
@@ -203,10 +222,14 @@ public abstract class ManagedTaskScopeFactoryImpl extends AbstractStructuredTask
                         return task.call();
                     } catch (RuntimeException e) {
                         throw e;
-                    } catch (Exception e) {
-                        throw new UncheckedTaskException(e);
+                    } catch (Throwable t) {
+                        throw new UncheckedTaskException(t);
                     }
                 });
+            }
+
+            @Override
+            public void close() {
             }
         };
     }

@@ -49,6 +49,11 @@ public abstract class ManagedTaskScope<T> extends StructuredTaskScope<T> {
          * @throws Exception if the task could not be wrapped.
          */
         <U> Callable<U> wrap(@Nonnull Callable<U> task) throws Exception;
+
+        /**
+         * Close the task managing wrapper.
+         */
+        void close();
     }
 
     /**
@@ -91,6 +96,15 @@ public abstract class ManagedTaskScope<T> extends StructuredTaskScope<T> {
         super.handleComplete(subtask);
     }
 
+    @Override
+    public void shutdown() {
+        try {
+            super.shutdown();
+        } finally {
+            taskManagingWrappers.forEach(TaskManagingWrapper::close);
+        }
+    }
+
     /**
      * Wrap a task with all task wrappers, effectively managing the task.
      *
@@ -99,19 +113,23 @@ public abstract class ManagedTaskScope<T> extends StructuredTaskScope<T> {
      * @param <U> type of the result of the task.
      */
     private <U> Callable<U> wrapAll(@Nonnull Callable<U> task) {
-        return taskManagingWrappers.stream()
-                .reduce(task,
-                        (currentTask, wrapper) -> {
-                            try {
-                                return wrapper.wrap(currentTask);
-                            } catch (RejectedExecutionException e) {
-                                throw e;
-                            } catch (Exception e) {
-                                throw new RejectedExecutionException(e);
-                            }
-                        },
-                        (_, _) -> { throw new UnsupportedOperationException("Parallel Stream not supported."); }
-                );
+        Callable<U> wrapped = task;
+        RejectedExecutionException rejected = null;
+        for (TaskManagingWrapper wrapper : taskManagingWrappers) {
+            try {
+                wrapped = wrapper.wrap(wrapped);
+            } catch (Throwable t) {
+                if (rejected == null) {
+                    rejected = t instanceof RejectedExecutionException re ? re : new RejectedExecutionException(t);
+                } else {
+                    rejected.addSuppressed(t);
+                }
+            }
+        }
+        if (rejected != null) {
+            throw rejected;
+        }
+        return wrapped;
     }
 
     /**
@@ -223,7 +241,7 @@ public abstract class ManagedTaskScope<T> extends StructuredTaskScope<T> {
                 T result = subtask.get();
                 Object r = (result != null) ? result : RESULT_NULL;
                 if (FIRST_RESULT.compareAndSet(this, null, r)) {
-                    super.shutdown();
+                    shutdown();
                 }
             } else if (firstException == null) {
                 // capture the exception thrown by the first subtask that failed
@@ -386,7 +404,7 @@ public abstract class ManagedTaskScope<T> extends StructuredTaskScope<T> {
             if (subtask.state() == Subtask.State.FAILED
                     && firstException == null
                     && FIRST_EXCEPTION.compareAndSet(this, null, subtask.exception())) {
-                super.shutdown();
+                shutdown();
             }
         }
 
