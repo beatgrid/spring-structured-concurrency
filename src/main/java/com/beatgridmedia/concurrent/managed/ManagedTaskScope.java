@@ -115,7 +115,8 @@ public abstract class ManagedTaskScope<T> extends StructuredTaskScope<T> {
     private <U> Callable<U> wrapAll(@Nonnull Callable<U> task) {
         Callable<U> wrapped = task;
         RejectedExecutionException rejected = null;
-        for (TaskManagingWrapper wrapper : taskManagingWrappers) {
+        for (int i = taskManagingWrappers.size() - 1; i >= 0; i--) {
+            TaskManagingWrapper wrapper = taskManagingWrappers.get(i);
             try {
                 wrapped = wrapper.wrap(wrapped);
             } catch (Throwable t) {
